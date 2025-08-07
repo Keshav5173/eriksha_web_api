@@ -1,0 +1,26 @@
+{
+  "name": "e-riksha-web-api",
+  "version": "1.0.0",
+  "description": "This is for handling e-riksha users data and allowing  only unique users on roads ",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "Keshav Bhardwaj",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cloudinary": "^2.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "imagemagick": "^0.1.3",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.17.0",
+    "mongoose-aggregate-paginate-v2": "^1.1.4",
+    "multer": "^2.0.2",
+    "tesseract.js": "^6.0.1"
+  }
+}
