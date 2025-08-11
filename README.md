@@ -6,82 +6,79 @@ This project streamlines the secure registration and verification of e-riksha ow
 
 ---
 
-## ⚙️ Workflow
 
-1. **Document Collection**
-   - E-riksha owners upload their **driving licence**, **vehicle registration**, and other documents through an authorized government portal or **e-Mitra**.
 
-2. **Data Extraction**
-   - System extracts key details like:
-     - Driving Licence Number
-     - Registration/RC Number
-     - Owner Information
-     - Other relevant fields (if needed)
+## ⚙️ Workflow (API Registration Endpoint)
 
-3. **Data Encryption & Storage**
-   - All sensitive information is **encrypted** before being stored.
-   - Encrypted data is saved securely in a **MongoDB database**.
+1. **Document Upload**
+   - User submits required documents: Driving Licence, Vehicle Document (RC), and optionally Aadhar via the `/register` API endpoint.
 
-4. **Duplicate Detection & Filtering**
-   - During verification, the database is scanned.
-   - Owners with **multiple e-rikshas** are identified and **removed**.
-   - Only **single-ownership** owners are retained.
+2. **OCR Extraction**
+   - The system extracts text from uploaded images using OCR:
+     - Extracts Driving Licence Number and Driver Name from the Licence Card.
+     - Extracts Owner Name and Vehicle Number from the Vehicle Document.
 
-5. **QR Code Generation**
-   - Eligible owners are issued a **QR code** containing:
-     - Encrypted personal and vehicle data
-     - Their **designated route/work zone**
-   - QR code data is **decryptable only through the official app** to maintain data privacy and security.
+3. **Validation**
+   - Checks if all required data (DL Number, Driver Name, Owner Name, Vehicle Number) is successfully extracted.
+   - Verifies that the Licence Card holder, Vehicle Owner, and provided Name are the same person.
+
+4. **Data Hashing & Storage**
+   - Sensitive fields (DL Number, Vehicle Number, Phone Number) are hashed using bcrypt.
+   - Owner and vehicle uniqueness is checked in the database (`unique_eriksha` collection).
+   - If unique, the vehicle and owner are recorded.
+
+5. **Document Upload to Cloudinary**
+   - Uploaded documents are stored securely on Cloudinary.
+   - Document URLs are linked to the Eriksha record.
+
+6. **Response**
+   - On success, the API responds with registration confirmation, saved Eriksha data, document URLs, and extracted DL Number.
 
 ---
 
-## 📊 Flowchart
+### API Flowchart
 
 ```text
 +-----------------------------+
-|     Start (Owner Input)     |
+|   POST /register endpoint   |
 +-------------+---------------+
               |
               v
 +-----------------------------+
-| Upload documents via e-Mitra|
+|  Upload documents (DL, RC)  |
 +-------------+---------------+
               |
               v
 +-----------------------------+
-| Extract DL & RC details     |
+|   OCR: Extract key fields   |
 +-------------+---------------+
               |
               v
 +-----------------------------+
-| Encrypt data and store in DB|
+| Validate & match owner info |
 +-------------+---------------+
               |
               v
 +-----------------------------+
-|  Scan DB for duplicates     |
-+------+------+--------------+
-       |     |
-     Yes     No
-       |      |
-       v      v
-+-------------+-----------------+
-| Remove multi-e-riksha owners |
-+------------------------------+
-              |
-              v
-+-----------------------------+
-| Generate encrypted QR code  |
-| (With route and details)    |
+| Hash sensitive data         |
 +-------------+---------------+
               |
               v
 +-----------------------------+
-|     Data only decryptable    |
-|     via our secure app       |
+| Check uniqueness in DB      |
 +-------------+---------------+
               |
               v
 +-----------------------------+
-|             End             |
+| Upload docs to Cloudinary   |
++-------------+---------------+
+              |
+              v
++-----------------------------+
+| Save Eriksha & docs in DB   |
++-------------+---------------+
+              |
+              v
++-----------------------------+
+|   Respond with success      |
 +-----------------------------+

@@ -3,8 +3,10 @@ import { upload } from "../middleware/multer.middleware.js";
 import { Eriksha } from "../models/e-riksha.models.js";
 import { Document } from "../models/document.models.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.utils.js";
-import {extractTextFromImage, extractDLNumber, extractAadhaarNumber } from "../utils/ocr.utils.js";
+import {extractTextFromImage, extractDLNumber, extractNameFromLicenceCard, extractOwnerNameFromRCUnlabeled, extractVehicleNumber } from "../utils/ocr.utils.js";
+
 import bcrypt from "bcrypt";
+import { unique_eriksha } from "../models/unique_erikshas.models.js";
 
 const router = express.Router();
 
@@ -21,43 +23,60 @@ router.post("/register", uploadFields, async (req, res) => {
     const files = req.files;
 
     //  Validate presence of files
-    if (!files?.aadhar || !files?.licenceCard || !files?.vehicleDoc) {
+    if (!files?.licenceCard || !files?.vehicleDoc) {
       return res.status(400).json({ error: "All documents must be uploaded" });
     }
 
     // OCR Extraction
-    const aadharText = await extractTextFromImage(files.aadhar[0].path);
-    console.log("Extracted Aadhaar Text:\n", aadharText);
+   
+
+
+    const vechicleDocText = await extractTextFromImage(files.vehicleDoc[0].path);
+    // console.log("Extracted Vechicle details are: ", vechicleDocText);
+
+
     const licenceText = await extractTextFromImage(files.licenceCard[0].path);
-    console.log("Extracted Licence Text:\n", licenceText);
+    // console.log("Extracted Licence Text:\n", licenceText);
 
 
-    const aadhaarNumber = extractAadhaarNumber(aadharText);
+    // extract dl number from licence card
     const dlNumber = extractDLNumber(licenceText);
+    console.log("Dl Number: ", dlNumber);
 
-    console.log("Aadhar number: ", aadhaarNumber);
-    console.log("DL number: ", dlNumber);
 
-    if (!aadhaarNumber || !dlNumber) {
-      return res.status(422).json({ error: "Unable to extract Aadhaar or DL number" });
+    // Extract Name from licence Card
+
+    const driverName = extractNameFromLicenceCard(licenceText);
+    console.log("DriverName: ", driverName);
+
+    // extract owner name from RC card
+    const e_riksha_OwnerName = extractOwnerNameFromRCUnlabeled(vechicleDocText);
+    console.log("Vechicle Owner: ", e_riksha_OwnerName);
+
+    // extract vechicle number from RC card
+
+    const erikshaVechicalNo = extractVehicleNumber(vechicleDocText);
+    console.log("Vechicle number: ",erikshaVechicalNo);
+
+    // if any of these doesn't exist return failed
+
+    if (!driverName || !dlNumber || !e_riksha_OwnerName || !erikshaVechicalNo) {
+      return res.status(422).json({ error: "Unable to extract data please try again!" });
     }
     
-    //  Upload documents to Cloudinary
-    const [aadharUrl, licenceUrl, vehicleUrl] = await Promise.all([
-      uploadOnCloudinary(files.aadhar[0].path),
-      uploadOnCloudinary(files.licenceCard[0].path),
-      uploadOnCloudinary(files.vehicleDoc[0].path)
-    ]);
+    // check if licence card holder and vechicle owner are same person
 
-    if (!aadharUrl || !licenceUrl || !vehicleUrl) {
-      return res.status(500).json({ error: "Cloudinary upload failed" });
+    if(driverName!==e_riksha_OwnerName || e_riksha_OwnerName!==Name){
+      return res.status(422).json({error: "Licence card holder and vechical owner are not same!"});
     }
+    
+    
 
     //  First, create Eriksha with validation (unhashed data)
     const erikshaRaw = new Eriksha({
-      Name,
+      Name:e_riksha_OwnerName,
       dlNumber,
-      aadharNo: aadhaarNumber,
+      eriksha_number: erikshaVechicalNo,
       phoneNo
     });
 
@@ -65,42 +84,75 @@ router.post("/register", uploadFields, async (req, res) => {
 
     //  Now hash sensitive fields manually
     erikshaRaw.dlNumber = await bcrypt.hash(dlNumber.toUpperCase(), 10);
-    erikshaRaw.aadharNo = await bcrypt.hash(aadhaarNumber.toUpperCase(), 10);
+    erikshaRaw.eriksha_number = await bcrypt.hash(erikshaVechicalNo.toUpperCase(), 10);
     erikshaRaw.phoneNo = await bcrypt.hash(phoneNo, 10);
+
+
+    // Before creating Eriksha, check if vehicle exists in unique_erikshas
+    const existingVehicle = await unique_eriksha.findOne({
+      vechicleOwner: erikshaRaw.Name.toUpperCase()
+    });
+
+    if (!existingVehicle) {
+      // Save it into unique_erikshas
+      await unique_eriksha.create({
+        vechicleNumber: erikshaVechicalNo.toUpperCase(),
+        vechicleOwner: Name,
+      });
+    }
 
     //  Save Eriksha after validation + hashing
     const savedEriksha = await erikshaRaw.save();
 
-    // Create Document records
-    const documents = await Document.insertMany([
-      {
-        Name: "Aadhar Card",
-        documentFile: aadharUrl.secure_url,
-        owner: savedEriksha._id
-      },
-      {
-        Name: "Licence Card",
-        documentFile: licenceUrl.secure_url,
-        owner: savedEriksha._id
-      },
-      {
-        Name: "Vehicle Document",
-        documentFile: vehicleUrl.secure_url,
-        owner: savedEriksha._id
-      }
+
+    //  Upload documents to Cloudinary
+    const [licenceUrl, vehicleUrl] = await Promise.all([
+      uploadOnCloudinary(files.licenceCard[0].path),
+      uploadOnCloudinary(files.vehicleDoc[0].path)
     ]);
 
-    //  Link documents to Eriksha and save
-    savedEriksha.document = documents.map(doc => doc._id);
-    await savedEriksha.save();
+    if (!licenceUrl || !vehicleUrl) {
+      return res.status(500).json({ error: "Cloudinary upload failed" });
+    }
 
-    //  Respond with success
+
+    // Create Document records
+    // const documents = await Document.insertMany([
+    //   {
+    //     Name: "Licence Card",
+    //     documentFile: licenceUrl.secure_url,
+    //     owner: savedEriksha._id
+    //   },
+    //   {
+    //     Name: "Vehicle Document",
+    //     documentFile: vehicleUrl.secure_url,
+    //     owner: savedEriksha._id
+    //   }
+    // ]);
+
+    //  Link documents to Eriksha and save
+   savedEriksha.document = [
+    {
+      name: "Licence Card",
+      file: licenceUrl.secure_url
+    },
+    {
+      name: "Vehicle Document",
+      file: vehicleUrl.secure_url
+    }
+  ];
+
+  await savedEriksha.save();
+
+
+    // Respond with success
     return res.status(201).json({
       message: "Registration successful",
       eriksha: savedEriksha,
-      documents,
-      extracted: { aadhaarNumber, dlNumber }
+      documents: savedEriksha.document,
+      extracted: { dlNumber }
     });
+
 
   } catch (error) {
     console.error("Error in register:", error);

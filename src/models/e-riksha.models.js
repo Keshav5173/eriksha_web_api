@@ -13,11 +13,10 @@ const e_rikshaSchema = mongoose.Schema({
         unique: true,
         // match: [/^[A-Z]{2}\d{2}/, "DL number must start with 2 letters followed by 2 digits (e.g., UP32...)"]
     },
-    aadharNo: {
+    eriksha_number: {
         type: String,
         required: true,
         unique: true,
-        // match: [/^[A-Z]{2}\d{2}/, "Licence must start with 2 letters, 2 digits (e.g., UP32...)"]
     },
     phoneNo: {
         type: String,
@@ -25,11 +24,12 @@ const e_rikshaSchema = mongoose.Schema({
         unique: true,
         // match: [/^[6-9]\d{9}$/, "Phone number must start with 6-9 and be 10 digits long"],
     },
-    document: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Document",
-        required: true,
-    }],
+    document: [
+    {
+      name: { type: String, required: true },
+      file: { type: String, required: true }
+    }
+  ]
 
 
 }, {timestamps: true});
